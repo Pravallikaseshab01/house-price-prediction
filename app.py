@@ -1,85 +1,89 @@
 import pickle
 import numpy as np
-import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.datasets import fetch_california_housing
+import pandas as pd
 
 # Load the trained model
 with open("house_price_model.pkl", "rb") as model_file:
     model = pickle.load(model_file)
 
-# Load the California Housing Dataset
-california_housing = fetch_california_housing()
-house_price_dataframe = pd.DataFrame(california_housing.data, columns=california_housing.feature_names)
-house_price_dataframe['price'] = california_housing.target
+# Load dataset properly
+try:
+    sample_data = pd.read_csv("indian_housing_data.csv")
+except FileNotFoundError:
+    st.error("Dataset 'indian_housing_data.csv' not found! Please generate it first.")
+    sample_data = None  # Prevent crashes
 
-# Streamlit UI Setup
+# Streamlit App UI
 st.title("Indian House Price Prediction App 🏡")
 st.write("Enter the house details to predict the price in Indian Rupees.")
 
-# User Input Fields
+# Layout to align input fields
 col1, col2 = st.columns(2)
-with col1:
-    FamilyIncome = st.number_input("Family Income (in INR)", min_value=0.0, step=1000.0)
-    HouseAge = st.number_input("House Age (years)", min_value=0, step=1)
-    AveRooms = st.number_input("Average Rooms per Household", min_value=0, step=1)
-    AveBedrms = st.number_input("Average Bedrooms per Household", min_value=0, step=1)
-with col2:
-    NumMembers = st.number_input("Number of Members in Family", min_value=0, step=1)
-    AveOccup = st.number_input("Average Occupancy per Household", min_value=0.0, step=0.1)
-    Latitude = st.number_input("Latitude", min_value=-90.0, max_value=90.0, step=0.1)
-    Longitude = st.number_input("Longitude", min_value=-180.0, max_value=180.0, step=0.1)
 
-# Predict Button
+with col1:
+    FamilyIncome = st.number_input("Family Income (in INR)", value=1000000.0, min_value=200000.0, max_value=5000000.0, step=10000.0)
+    HouseAge = st.number_input("House Age (years)", value=5, min_value=1, max_value=50, step=1)
+    AveRooms = st.number_input("Average Rooms per Household", value=3, min_value=1, max_value=6, step=1)
+    AveBedrms = st.number_input("Average Bedrooms per Household", value=1, min_value=1, max_value=5, step=1)
+
+with col2:
+    NumMembers = st.number_input("Number of Members in Family", value=3, min_value=1, max_value=10, step=1)
+    AveOccup = st.number_input("Average Occupancy per Household", value=1.0, min_value=1.0, max_value=5.0, step=0.1)
+    Latitude = st.number_input("Latitude", value=19.0, min_value=6.0, max_value=38.0, step=0.1)
+    Longitude = st.number_input("Longitude", value=78.0, min_value=65.0, max_value=98.0, step=0.1)
+
 if st.button("Predict Price 💰"):
     input_data = np.array([[FamilyIncome, HouseAge, AveRooms, AveBedrms, NumMembers, AveOccup, Latitude, Longitude]])
-    prediction = model.predict(input_data)[0] * 100000  # Converting to INR
+    raw_prediction = model.predict(input_data)[0]
+    prediction = max(0, raw_prediction * 1000000)  # Convert to INR
+
     st.success(f"Estimated House Price: ₹{prediction:,.2f}")
 
-    # Visualization Section
-    st.subheader("Data Insights and Visualizations 📊")
-    
-    # 1. Distribution of House Prices
-    fig, ax = plt.subplots()
-    sns.histplot(house_price_dataframe['price'] * 100000, bins=50, kde=True, ax=ax)
-    ax.set_title("Distribution of House Prices (in INR)")
-    ax.set_xlabel("Price (₹)")
-    ax.set_ylabel("Frequency")
-    st.pyplot(fig)
-    st.write("This histogram shows the distribution of house prices, indicating the most common price ranges.")
+    # Ensure dataset exists before visualization
+    if sample_data is not None:
+        st.subheader("📊 Data Visualizations")
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
-    # 2. Correlation Heatmap
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(house_price_dataframe.corr(), annot=True, cmap='coolwarm', ax=ax)
-    ax.set_title("Correlation Heatmap of Features")
-    st.pyplot(fig)
-    st.write("This heatmap displays the relationships between different housing features and the target price.")
+        # Check column names match dataset
+        column_map = {
+            "FamilyIncome": "Family Income",
+            "HouseAge": "House Age",
+            "AveRooms": "Average Rooms per Household",
+            "AveBedrms": "Average Bedrooms per Household",
+            "AveOccup": "Average Occupancy per Household",
+            "Price": "Predicted Price"
+        }
 
-    # 3. House Price vs. Family Income
-    fig, ax = plt.subplots()
-    sns.scatterplot(x=house_price_dataframe['MedInc'], y=house_price_dataframe['price'], alpha=0.5, ax=ax)
-    ax.set_title("House Price vs. Family Income")
-    ax.set_xlabel("Family Income (in INR)")
-    ax.set_ylabel("Price (in INR)")
-    st.pyplot(fig)
-    st.write("This scatter plot shows that higher family incomes generally correspond to higher house prices.")
+        # Rename columns to prevent KeyErrors
+        sample_data.rename(columns=column_map, inplace=True)
 
-    # 4. House Price vs. House Age
-    fig, ax = plt.subplots()
-    sns.boxplot(x=house_price_dataframe['HouseAge'], y=house_price_dataframe['price'], ax=ax)
-    ax.set_title("House Price Distribution by Age")
-    ax.set_xlabel("House Age (years)")
-    ax.set_ylabel("Price (in INR)")
-    st.pyplot(fig)
-    st.write("This box plot illustrates how house prices vary based on the age of the house.")
+        # Histograms
+        sns.histplot(sample_data["Family Income"], ax=axes[0, 0], kde=True, color="blue")
+        axes[0, 0].axvline(FamilyIncome, color='red', linestyle='dashed', linewidth=2)
+        axes[0, 0].set_title("Family Income Distribution")
 
-    # 5. Number of Members vs. House Price
-    fig, ax = plt.subplots()
-    sns.scatterplot(x=house_price_dataframe['Population'], y=house_price_dataframe['price'], alpha=0.5, ax=ax)
-    ax.set_title("Number of Members in Family vs. House Price")
-    ax.set_xlabel("Number of Members in Family")
-    ax.set_ylabel("Price (in INR)")
-    st.pyplot(fig)
-    st.write("This scatter plot shows how the number of family members influences house prices.")
+        sns.histplot(sample_data["House Age"], ax=axes[0, 1], kde=True, color="red")
+        axes[0, 1].axvline(HouseAge, color='blue', linestyle='dashed', linewidth=2)
+        axes[0, 1].set_title("House Age Distribution")
+
+        sns.histplot(sample_data["Average Rooms per Household"], ax=axes[0, 2], kde=True, color="green")
+        axes[0, 2].axvline(AveRooms, color='black', linestyle='dashed', linewidth=2)
+        axes[0, 2].set_title("Rooms per Household Distribution")
+
+        sns.histplot(sample_data["Average Bedrooms per Household"], ax=axes[1, 0], kde=True, color="purple")
+        axes[1, 0].axvline(AveBedrms, color='black', linestyle='dashed', linewidth=2)
+        axes[1, 0].set_title("Bedrooms per Household Distribution")
+
+        sns.histplot(sample_data["Average Occupancy per Household"], ax=axes[1, 1], kde=True, color="orange")
+        axes[1, 1].axvline(AveOccup, color='black', linestyle='dashed', linewidth=2)
+        axes[1, 1].set_title("Occupancy per Household Distribution")
+
+        sns.histplot(sample_data["Predicted Price"], ax=axes[1, 2], kde=True, color="black")
+        axes[1, 2].axvline(prediction, color='blue', linestyle='dashed', linewidth=2)
+        axes[1, 2].set_title("Predicted House Price Distribution")
+
+        plt.tight_layout()
+        st.pyplot(fig)
